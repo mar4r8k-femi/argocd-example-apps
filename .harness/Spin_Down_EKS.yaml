@@ -38,7 +38,7 @@ pipeline:
                   type: IACMTerraformPlugin
                   name: destroy
                   identifier: destroy
-                  timeout: 10m
+                  timeout: 1h
                   spec:
                     command: destroy
         tags: {}
