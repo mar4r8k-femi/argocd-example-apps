@@ -29,15 +29,28 @@ resource "aws_vpc" "eks_vpc" {
 # Get available AZs
 data "aws_availability_zones" "available" {}
 
-# Create a single subnet
-resource "aws_subnet" "subnet" {
+# Create two subnets in different AZs (EKS requirement)
+resource "aws_subnet" "subnet_az1" {
   vpc_id                  = aws_vpc.eks_vpc.id
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, 0)
   availability_zone       = data.aws_availability_zones.available.names[0]
   map_public_ip_on_launch = true
 
   tags = {
-    Name                                           = "${var.cluster_name}-subnet"
+    Name                                           = "${var.cluster_name}-subnet-az1"
+    "kubernetes.io/cluster/${var.cluster_name}"    = "shared"
+    "kubernetes.io/role/elb"                       = "1"
+  }
+}
+
+resource "aws_subnet" "subnet_az2" {
+  vpc_id                  = aws_vpc.eks_vpc.id
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, 1)
+  availability_zone       = data.aws_availability_zones.available.names[1]
+  map_public_ip_on_launch = true
+
+  tags = {
+    Name                                           = "${var.cluster_name}-subnet-az2"
     "kubernetes.io/cluster/${var.cluster_name}"    = "shared"
     "kubernetes.io/role/elb"                       = "1"
   }
@@ -66,9 +79,14 @@ resource "aws_route_table" "route_table" {
   }
 }
 
-# Route Table Association
-resource "aws_route_table_association" "subnet_association" {
-  subnet_id      = aws_subnet.subnet.id
+# Route Table Associations
+resource "aws_route_table_association" "subnet_az1_association" {
+  subnet_id      = aws_subnet.subnet_az1.id
+  route_table_id = aws_route_table.route_table.id
+}
+
+resource "aws_route_table_association" "subnet_az2_association" {
+  subnet_id      = aws_subnet.subnet_az2.id
   route_table_id = aws_route_table.route_table.id
 }
 
@@ -207,7 +225,7 @@ resource "aws_eks_cluster" "eks_cluster" {
   version  = "1.28"  # Specify your desired Kubernetes version
 
   vpc_config {
-    subnet_ids             = [aws_subnet.subnet.id]
+    subnet_ids             = [aws_subnet.subnet_az1.id, aws_subnet.subnet_az2.id]
     security_group_ids     = [aws_security_group.eks_cluster_sg.id]
     endpoint_private_access = true
     endpoint_public_access  = true
@@ -223,7 +241,7 @@ resource "aws_eks_node_group" "eks_node_group" {
   cluster_name    = aws_eks_cluster.eks_cluster.name
   node_group_name = "${var.cluster_name}-node-group"
   node_role_arn   = aws_iam_role.eks_node_role.arn
-  subnet_ids      = [aws_subnet.subnet.id]
+  subnet_ids      = [aws_subnet.subnet_az1.id, aws_subnet.subnet_az2.id]
   instance_types  = ["t3.medium"]  # 2 vCPUs, 4GB memory
   disk_size       = 50             # 50GB disk as required
 
