@@ -265,51 +265,6 @@ resource "aws_eks_node_group" "eks_node_group" {
   }
 }
 
-# Create a kubernetes provider to set up the service account
-provider "kubernetes" {
-  host                   = aws_eks_cluster.eks_cluster.endpoint
-  cluster_ca_certificate = base64decode(aws_eks_cluster.eks_cluster.certificate_authority[0].data)
-  exec {
-    api_version = "client.authentication.k8s.io/v1beta1"
-    args        = ["eks", "get-token", "--cluster-name", aws_eks_cluster.eks_cluster.name]
-    command     = "aws"
-  }
-}
-
-# Service Account for Harness GitOps Agent with cluster-admin permissions
-resource "kubernetes_service_account" "harness_gitops_agent" {
-  metadata {
-    name      = "harness-gitops-agent"
-    namespace = "default"  # You might want to create a dedicated namespace
-  }
-
-  depends_on = [
-    aws_eks_node_group.eks_node_group
-  ]
-}
-
-resource "kubernetes_cluster_role_binding" "harness_gitops_agent_binding" {
-  metadata {
-    name = "harness-gitops-agent-binding"
-  }
-
-  role_ref {
-    api_group = "rbac.authorization.k8s.io"
-    kind      = "ClusterRole"
-    name      = "cluster-admin"  # Using cluster-admin as requested
-  }
-
-  subject {
-    kind      = "ServiceAccount"
-    name      = kubernetes_service_account.harness_gitops_agent.metadata[0].name
-    namespace = kubernetes_service_account.harness_gitops_agent.metadata[0].namespace
-  }
-
-  depends_on = [
-    kubernetes_service_account.harness_gitops_agent
-  ]
-}
-
 # Outputs
 output "eks_cluster_endpoint" {
   value = aws_eks_cluster.eks_cluster.endpoint
@@ -327,6 +282,10 @@ output "kubeconfig_command" {
   value = "aws eks update-kubeconfig --region us-west-2 --name ${aws_eks_cluster.eks_cluster.name}"
 }
 
-output "harness_service_account" {
-  value = kubernetes_service_account.harness_gitops_agent.metadata[0].name
-}
+# Note: The Kubernetes service account needs to be created after connecting to the cluster
+# Run these commands after the EKS cluster is provisioned:
+# 
+# kubectl create serviceaccount harness-gitops-agent
+# kubectl create clusterrolebinding harness-gitops-agent-binding \
+#   --clusterrole=cluster-admin \
+#   --serviceaccount=default:harness-gitops-agent
