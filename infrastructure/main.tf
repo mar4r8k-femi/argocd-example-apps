@@ -282,10 +282,9 @@ output "kubeconfig_command" {
   value = "aws eks update-kubeconfig --region us-west-2 --name ${aws_eks_cluster.eks_cluster.name}"
 }
 
-# Note: The Kubernetes service account needs to be created after connecting to the cluster
-# Run these commands after the EKS cluster is provisioned:
+# Note: After the EKS cluster is provisioned, create the Kubernetes service account manually:
 # 
-# kubectl create serviceaccount harness-gitops-agent
+# kubectl create serviceaccount harness-gitops-agent -n default
 # kubectl create clusterrolebinding harness-gitops-agent-binding \
 #   --clusterrole=cluster-admin \
 #   --serviceaccount=default:harness-gitops-agent
