@@ -251,11 +251,8 @@ resource "aws_eks_node_group" "eks_node_group" {
     max_size     = 3               # Allow for one additional node if needed
   }
 
-  # Remote access is optional - removing the ec2_ssh_key reference
-  # If you need SSH access later, you can add a key pair in AWS and update this
-  remote_access {
-    source_security_group_ids = [aws_security_group.eks_nodes_sg.id]
-  }
+  # Remote access configuration removed as we don't have a valid key pair
+  # and AWS doesn't allow an empty SSH key when remote_access is specified
 
   depends_on = [
     aws_iam_role_policy_attachment.eks_worker_node_policy,
