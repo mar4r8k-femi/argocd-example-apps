@@ -251,8 +251,9 @@ resource "aws_eks_node_group" "eks_node_group" {
     max_size     = 3               # Allow for one additional node if needed
   }
 
+  # Remote access is optional - removing the ec2_ssh_key reference
+  # If you need SSH access later, you can add a key pair in AWS and update this
   remote_access {
-    ec2_ssh_key               = "Femi-Key-USE2"  # SSH key for node access
     source_security_group_ids = [aws_security_group.eks_nodes_sg.id]
   }
 
