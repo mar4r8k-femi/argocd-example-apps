@@ -32,7 +32,7 @@ data "aws_availability_zones" "available" {}
 # Create two subnets in different AZs (EKS requirement)
 resource "aws_subnet" "subnet_az1" {
   vpc_id                  = aws_vpc.eks_vpc.id
-  cidr_block              = cidrsubnet(var.vpc_cidr, 8, 0)
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, 10)
   availability_zone       = data.aws_availability_zones.available.names[0]
   map_public_ip_on_launch = true
 
@@ -45,7 +45,7 @@ resource "aws_subnet" "subnet_az1" {
 
 resource "aws_subnet" "subnet_az2" {
   vpc_id                  = aws_vpc.eks_vpc.id
-  cidr_block              = cidrsubnet(var.vpc_cidr, 8, 1)
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, 11)
   availability_zone       = data.aws_availability_zones.available.names[1]
   map_public_ip_on_launch = true
 
