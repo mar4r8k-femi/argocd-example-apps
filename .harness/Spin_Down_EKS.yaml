@@ -1,0 +1,44 @@
+pipeline:
+  name: Spin Down EKS
+  identifier: Spin_Down_EKS
+  projectIdentifier: Femi_Sandbox
+  orgIdentifier: sandbox
+  tags: {}
+  stages:
+    - stage:
+        name: Spin Down Cluster
+        identifier: Spin_Down_Cluster
+        description: ""
+        type: IACM
+        spec:
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          workspace: GitOps_EKS
+          execution:
+            steps:
+              - step:
+                  type: IACMTerraformPlugin
+                  name: init
+                  identifier: init
+                  timeout: 10m
+                  spec:
+                    command: init
+              - step:
+                  type: IACMTerraformPlugin
+                  name: planDestroy
+                  identifier: planDestroy
+                  timeout: 10m
+                  spec:
+                    command: plan-destroy
+              - step:
+                  type: IACMTerraformPlugin
+                  name: destroy
+                  identifier: destroy
+                  timeout: 10m
+                  spec:
+                    command: destroy
+        tags: {}
