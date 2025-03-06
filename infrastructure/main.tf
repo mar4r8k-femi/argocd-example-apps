@@ -26,55 +26,20 @@ resource "aws_vpc" "eks_vpc" {
   }
 }
 
-# Create 2 public subnets in different AZs
-resource "aws_subnet" "public_subnet_1" {
+# Get available AZs
+data "aws_availability_zones" "available" {}
+
+# Create a single subnet
+resource "aws_subnet" "subnet" {
   vpc_id                  = aws_vpc.eks_vpc.id
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, 0)
   availability_zone       = data.aws_availability_zones.available.names[0]
   map_public_ip_on_launch = true
 
   tags = {
-    Name                                           = "${var.cluster_name}-public-subnet-1"
+    Name                                           = "${var.cluster_name}-subnet"
     "kubernetes.io/cluster/${var.cluster_name}"    = "shared"
     "kubernetes.io/role/elb"                       = "1"
-  }
-}
-
-resource "aws_subnet" "public_subnet_2" {
-  vpc_id                  = aws_vpc.eks_vpc.id
-  cidr_block              = cidrsubnet(var.vpc_cidr, 8, 1)
-  availability_zone       = data.aws_availability_zones.available.names[1]
-  map_public_ip_on_launch = true
-
-  tags = {
-    Name                                           = "${var.cluster_name}-public-subnet-2"
-    "kubernetes.io/cluster/${var.cluster_name}"    = "shared"
-    "kubernetes.io/role/elb"                       = "1"
-  }
-}
-
-# Create 2 private subnets in different AZs
-resource "aws_subnet" "private_subnet_1" {
-  vpc_id            = aws_vpc.eks_vpc.id
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, 2)
-  availability_zone = data.aws_availability_zones.available.names[0]
-
-  tags = {
-    Name                                           = "${var.cluster_name}-private-subnet-1"
-    "kubernetes.io/cluster/${var.cluster_name}"    = "shared"
-    "kubernetes.io/role/internal-elb"              = "1"
-  }
-}
-
-resource "aws_subnet" "private_subnet_2" {
-  vpc_id            = aws_vpc.eks_vpc.id
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, 3)
-  availability_zone = data.aws_availability_zones.available.names[1]
-
-  tags = {
-    Name                                           = "${var.cluster_name}-private-subnet-2"
-    "kubernetes.io/cluster/${var.cluster_name}"    = "shared"
-    "kubernetes.io/role/internal-elb"              = "1"
   }
 }
 
@@ -87,28 +52,8 @@ resource "aws_internet_gateway" "igw" {
   }
 }
 
-# NAT Gateway with Elastic IP
-resource "aws_eip" "nat_eip" {
-  domain = "vpc"
-
-  tags = {
-    Name = "${var.cluster_name}-nat-eip"
-  }
-}
-
-resource "aws_nat_gateway" "nat_gateway" {
-  allocation_id = aws_eip.nat_eip.id
-  subnet_id     = aws_subnet.public_subnet_1.id
-
-  tags = {
-    Name = "${var.cluster_name}-nat-gateway"
-  }
-
-  depends_on = [aws_internet_gateway.igw]
-}
-
-# Route Tables
-resource "aws_route_table" "public_route_table" {
+# Route Table
+resource "aws_route_table" "route_table" {
   vpc_id = aws_vpc.eks_vpc.id
 
   route {
@@ -117,42 +62,14 @@ resource "aws_route_table" "public_route_table" {
   }
 
   tags = {
-    Name = "${var.cluster_name}-public-route-table"
+    Name = "${var.cluster_name}-route-table"
   }
 }
 
-resource "aws_route_table" "private_route_table" {
-  vpc_id = aws_vpc.eks_vpc.id
-
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.nat_gateway.id
-  }
-
-  tags = {
-    Name = "${var.cluster_name}-private-route-table"
-  }
-}
-
-# Route Table Associations
-resource "aws_route_table_association" "public_subnet_1_association" {
-  subnet_id      = aws_subnet.public_subnet_1.id
-  route_table_id = aws_route_table.public_route_table.id
-}
-
-resource "aws_route_table_association" "public_subnet_2_association" {
-  subnet_id      = aws_subnet.public_subnet_2.id
-  route_table_id = aws_route_table.public_route_table.id
-}
-
-resource "aws_route_table_association" "private_subnet_1_association" {
-  subnet_id      = aws_subnet.private_subnet_1.id
-  route_table_id = aws_route_table.private_route_table.id
-}
-
-resource "aws_route_table_association" "private_subnet_2_association" {
-  subnet_id      = aws_subnet.private_subnet_2.id
-  route_table_id = aws_route_table.private_route_table.id
+# Route Table Association
+resource "aws_route_table_association" "subnet_association" {
+  subnet_id      = aws_subnet.subnet.id
+  route_table_id = aws_route_table.route_table.id
 }
 
 # Security Groups
@@ -228,9 +145,6 @@ resource "aws_security_group" "eks_nodes_sg" {
   }
 }
 
-# Get available AZs
-data "aws_availability_zones" "available" {}
-
 # IAM Roles for EKS
 resource "aws_iam_role" "eks_cluster_role" {
   name = "${var.cluster_name}-cluster-role"
@@ -293,12 +207,7 @@ resource "aws_eks_cluster" "eks_cluster" {
   version  = "1.28"  # Specify your desired Kubernetes version
 
   vpc_config {
-    subnet_ids             = [
-      aws_subnet.public_subnet_1.id,
-      aws_subnet.public_subnet_2.id,
-      aws_subnet.private_subnet_1.id,
-      aws_subnet.private_subnet_2.id
-    ]
+    subnet_ids             = [aws_subnet.subnet.id]
     security_group_ids     = [aws_security_group.eks_cluster_sg.id]
     endpoint_private_access = true
     endpoint_public_access  = true
@@ -314,12 +223,9 @@ resource "aws_eks_node_group" "eks_node_group" {
   cluster_name    = aws_eks_cluster.eks_cluster.name
   node_group_name = "${var.cluster_name}-node-group"
   node_role_arn   = aws_iam_role.eks_node_role.arn
-  subnet_ids      = [
-    aws_subnet.private_subnet_1.id,
-    aws_subnet.private_subnet_2.id
-  ]
-  instance_types  = ["t3.medium"]  # 2 vCPUs, 4GB memory, can be adjusted as needed
-  disk_size       = 50              # 50GB disk as required
+  subnet_ids      = [aws_subnet.subnet.id]
+  instance_types  = ["t3.medium"]  # 2 vCPUs, 4GB memory
+  disk_size       = 50             # 50GB disk as required
 
   scaling_config {
     desired_size = 2               # 2 nodes as required
