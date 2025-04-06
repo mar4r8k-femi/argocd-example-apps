@@ -17,7 +17,7 @@ pipeline:
           runtime:
             type: Cloud
             spec: {}
-          workspace: GitOps_EKS
+          workspace: AWS_EKS
           execution:
             steps:
               - step:
